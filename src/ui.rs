@@ -2,10 +2,13 @@ use std::io::Write;
 use console::{Key, Term};
 use std::{time::Duration, sync::mpsc::Receiver};
 
+use crate::timer::TimerState;
+
 
 pub enum UiMessage {
     Input(Key),
     Time(Duration),
+    TimerState(TimerState),
     Stop,
 }
 
@@ -16,14 +19,17 @@ pub fn spawn_ui_thread(rx: Receiver<UiMessage>) {
 
         term.hide_cursor()?;
         term.clear_screen()?;
-        term.clean_write_line_to(0, 3, String::from("pog timer"))?;
+        term.clean_write_line_to(0, 6, String::from("pog timer"))?;
+        term.clean_write_line_to(0, 0, format!("{}", TimerState::Work))?;
         term.flush()?;
+        
 
         loop {
             match rx.recv().unwrap() {
                 UiMessage::Input(key) => {
-                    term.clean_write_line_to(0, 1, format!("{:?}", key))?;
-                },
+                    term.clean_write_line_to(0, 2, format!("{:?}", key))?;
+                }
+
                 UiMessage::Time(time_left) => {
                     let secs_left = time_left.as_secs();
 
@@ -33,8 +39,13 @@ pub fn spawn_ui_thread(rx: Receiver<UiMessage>) {
                         secs_left % 60
                     );
 
-                    term.clean_write_line_to(0, 0, timer_msg)?;
-                },
+                    term.clean_write_line_to(0, 1, timer_msg)?;
+                }
+
+                UiMessage::TimerState(timer_state) => {
+                    term.clean_write_line_to(0, 0, format!("{}", timer_state))?;
+                }
+
                 UiMessage::Stop => break,
             }
         }

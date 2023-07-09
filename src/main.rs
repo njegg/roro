@@ -22,6 +22,8 @@ fn main() -> std::io::Result<()> {
             Ok(key) => match key {
                 Key::Escape => break,
                 Key::Char(' ') => tx_timer.send(TimerCommand::Play).unwrap(),
+                Key::Char('n') => tx_timer.send(TimerCommand::Next).unwrap(),
+                Key::Char('p') => tx_timer.send(TimerCommand::Prev).unwrap(),
 
                 _ => tx_ui.send(UiMessage::Input(key)).unwrap()
             },
