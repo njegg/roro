@@ -16,7 +16,6 @@ fn main() -> std::io::Result<()> {
     spawn_ui_thread(rx_ui);
     spawn_timer_thread(rx_timer, tx_ui.clone());
 
-
     loop {
         match term.read_key() {
             Ok(key) => match key {

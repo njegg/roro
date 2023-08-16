@@ -52,7 +52,6 @@ struct Timer {
 }
 
 impl Timer {
-
     fn defaults() -> Timer {
         let work_time: u64 = 6;
 
@@ -103,7 +102,7 @@ impl Timer {
             Work => {
                 new_pomo_value -= 1;
 
-                if self.pomo % self.long_break_interval == 0 {
+                if self.pomo % self.long_break_interval == 1 {
                     LongBreak
                 } else {
                     Break
@@ -142,15 +141,18 @@ pub fn spawn_timer_thread(rx: Receiver<TimerCommand>, tx_ui: Sender<UiMessage>) 
             if timer.is_playing {
                 std::thread::sleep(SECOND);
 
-                match rx.try_recv() { // Check for commands without blocking
-                    Ok(command) => match command {
-                        Play  => timer.is_playing = !timer.is_playing,
+                // Check for commands without blocking
+                loop {
+                    match rx.try_recv() {
+                        Ok(command) => match command {
+                            Play  => timer.is_playing = !timer.is_playing,
 
-                        _ => ()
-                    },
-                    Err(why) => match why {
-                        mpsc::TryRecvError::Empty => (),
-                        mpsc::TryRecvError::Disconnected => panic!("{}", why),
+                            _ => ()
+                        },
+                        Err(why) => match why {
+                            mpsc::TryRecvError::Empty => break,
+                            mpsc::TryRecvError::Disconnected => panic!("{}", why),
+                        }
                     }
                 }
 
@@ -162,26 +164,26 @@ pub fn spawn_timer_thread(rx: Receiver<TimerCommand>, tx_ui: Sender<UiMessage>) 
                         timer.is_playing = false;
                         timer.next_state();
 
-                        tx_ui.send(UiMessage::TimerState(timer.state)).unwrap();
+                        tx_ui.send(UiMessage::TimerState(timer.state, timer.pomo)).unwrap();
                     }
                 }
 
                 tx_ui.send(UiMessage::Time(timer.time_left)).unwrap();
             } else {
                 loop {
-                    match rx.recv().unwrap() { // Wait for command
+                    match rx.recv().unwrap() { // Block untill command is recieved
                         Play => { timer.is_playing = true; break }
 
                         Next => {
                             timer.next_state();
                             tx_ui.send(UiMessage::Time(timer.time_left)).unwrap();
-                            tx_ui.send(UiMessage::TimerState(timer.state)).unwrap();
+                            tx_ui.send(UiMessage::TimerState(timer.state, timer.pomo)).unwrap();
                         }
 
                         Prev => {
                             timer.prev_state();
                             tx_ui.send(UiMessage::Time(timer.time_left)).unwrap();
-                            tx_ui.send(UiMessage::TimerState(timer.state)).unwrap();
+                            tx_ui.send(UiMessage::TimerState(timer.state, timer.pomo)).unwrap();
                         }
 
                         Exit => break,

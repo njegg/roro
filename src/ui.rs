@@ -8,7 +8,7 @@ use crate::timer::TimerState;
 pub enum UiMessage {
     Input(Key),
     Time(Duration),
-    TimerState(TimerState),
+    TimerState(TimerState, u64),
     Stop,
 }
 
@@ -42,8 +42,8 @@ pub fn spawn_ui_thread(rx: Receiver<UiMessage>) {
                     term.clean_write_line_to(0, 1, timer_msg)?;
                 }
 
-                UiMessage::TimerState(timer_state) => {
-                    term.clean_write_line_to(0, 0, format!("{}", timer_state))?;
+                UiMessage::TimerState(timer_state, pomo) => {
+                    term.clean_write_line_to(0, 0, format!("pomo #{} [{}]", pomo, timer_state))?;
                 }
 
                 UiMessage::Stop => break,
