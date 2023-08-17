@@ -31,6 +31,7 @@ impl std::fmt::Display for TimerState {
             Break => "Break",
             LongBreak => "Long Break",
         };
+
         write!(f, "{}", printable)
     }
 }
@@ -119,11 +120,13 @@ impl Timer {
         self.state = new_state;
         self.is_playing = false;
 
-        self.time_left = Duration::from_secs(match new_state {
-            Work => self.work_time,
-            Break => self.break_time,
-            LongBreak => self.long_break_time
-        });
+        self.time_left = Duration::from_secs(
+            match new_state {
+                Work => self.work_time,
+                Break => self.break_time,
+                LongBreak => self.long_break_time 
+            }
+        );
     }
 }
 
@@ -135,6 +138,7 @@ pub fn spawn_timer_thread(rx: Receiver<TimerCommand>, tx_ui: Sender<UiMessage>) 
         let mut timer = Timer::defaults();
 
         tx_ui.send(UiMessage::Time(timer.time_left)).unwrap();
+        tx_ui.send(UiMessage::TimerState(timer.state, timer.pomo)).unwrap();
 
         // TODO is zero => stopped, add Reset state
         while !timer.time_left.is_zero() {

@@ -1,0 +1,32 @@
+
+
+#########################################################
+#                                                       #
+#                                                       #
+#                     LONG BREAK                        #
+#                                                       #
+#                        24:59                          #
+#                                                       #
+#                       pomo #1                         #
+#                                                       #
+#                     n      -   next                   #
+#                     p      -   prev                   #
+#                     space  -   pause                  #
+#                     esc    -   exit                   #
+#                                                       #
+#                     confirm [y]                       #
+#                                                       #
+#                                                       #
+#h - help | confirm [Y]:                                #
+#########################################################
+
+min height = 16
+min widht = 16
+
+lines
+    state:   2
+    timer:   4
+    pomo:    6
+    help:    8
+    confirm: 10
+    help:    h-1
