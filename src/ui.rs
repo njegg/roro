@@ -2,7 +2,7 @@ use std::io::Write;
 use console::{Key, Term};
 use std::{time::Duration, sync::mpsc::Receiver};
 
-use crate::timer::TimerState;
+use crate::timer::{TimerState, TimerCommand};
 
 
 const _MIN_WIDTH: u16 = 16;
@@ -20,12 +20,15 @@ pub enum UiMessage {
     Input(Key),
     Time(Duration),
     TimerState(TimerState, u64),
+    ShowConfirm(bool), // bool - show or hide the message
     Stop,
 }
 
 
 pub fn spawn_ui_thread(rx: Receiver<UiMessage>) {
     std::thread::spawn(move || -> std::io::Result<()> {
+        use UiMessage::*;
+
         let mut term = Term::stdout();
 
         term.hide_cursor()?;
@@ -35,11 +38,11 @@ pub fn spawn_ui_thread(rx: Receiver<UiMessage>) {
         
         loop {
             match rx.recv().unwrap() {
-                UiMessage::Input(key) => {
+                Input(key) => {
                     term.println_to(0, term.size().0 as usize - 1, format!("{:?}", key))?;
                 }
 
-                UiMessage::Time(time_left) => {
+                Time(time_left) => {
                     let secs_left = time_left.as_secs();
 
                     let timer_msg = format!(
@@ -51,12 +54,21 @@ pub fn spawn_ui_thread(rx: Receiver<UiMessage>) {
                     term.println_to_centered(TIMER_Y, timer_msg)?;
                 }
 
-                UiMessage::TimerState(timer_state, pomo) => {
+                TimerState(timer_state, pomo) => {
                     term.println_to_centered(STATE_Y, format!("{}", timer_state))?;
                     term.println_to_centered(POMO_Y, format!("pomo #{}", pomo as u8))?;
                 }
 
-                UiMessage::Stop => break,
+                ShowConfirm(true) => {
+                    term.println_to_centered(_CONFIRM_Y, String::from("[y] to confirm"))?;
+                }
+
+                ShowConfirm(false) => {
+                    term.move_cursor_to(0, _CONFIRM_Y)?;
+                    term.clear_line()?;
+                }
+
+                Stop => break,
             }
         }
         

@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 clap = "4.3.5"
 console = "0.15.7"
+notify-rust = "4.8.0"

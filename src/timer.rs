@@ -1,6 +1,7 @@
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::time::Duration;
 use TimerState::*;
+use notify_rust::{Notification, Timeout};
 
 use crate::ui::UiMessage;
 
@@ -12,11 +13,11 @@ pub enum TimerCommand {
     Play,
     Next,
     Prev,
+    Confirm(bool),
     Exit,
 }
 
 #[derive(Default, Clone, Copy)]
-#[allow(dead_code)]
 pub enum TimerState {
     #[default]
     Work,
@@ -50,23 +51,28 @@ struct Timer {
 
     state: TimerState,
     is_playing: bool,
+    command_waiting_for_confirm: Option<TimerCommand>,
 }
 
 impl Timer {
     fn defaults() -> Timer {
-        let work_time: u64 = 6;
+        let work_time: u64 = 30;
+        let break_time: u64 = 5;
+        let long_break_time: u64 = 60;
+        let long_break_interval: u64 = 4;
 
         return Timer {
             is_playing: false,
             state: TimerState::Work,
-            time_left: Duration::from_secs(work_time),
+            time_left: Duration::from_mins(work_time),
             pomo: 1,
 
             work_time,
-            break_time: 5,
-            long_break_time: 10,
-            
-            long_break_interval: 3,
+            break_time,
+            long_break_time,
+            long_break_interval,
+
+            command_waiting_for_confirm: None,
         }
     }
 
@@ -120,13 +126,22 @@ impl Timer {
         self.state = new_state;
         self.is_playing = false;
 
-        self.time_left = Duration::from_secs(
+        self.time_left = Duration::from_mins(
             match new_state {
                 Work => self.work_time,
                 Break => self.break_time,
                 LongBreak => self.long_break_time 
             }
         );
+    }
+
+    pub fn is_zero(&self) -> bool {
+        self.time_left.is_zero()
+    }
+
+    fn send_state_to_ui(&self, tx_ui: &Sender<UiMessage>) {
+        tx_ui.send(UiMessage::Time(self.time_left)).unwrap();
+        tx_ui.send(UiMessage::TimerState(self.state, self.pomo)).unwrap();
     }
 }
 
@@ -137,22 +152,20 @@ pub fn spawn_timer_thread(rx: Receiver<TimerCommand>, tx_ui: Sender<UiMessage>) 
 
         let mut timer = Timer::defaults();
 
-        tx_ui.send(UiMessage::Time(timer.time_left)).unwrap();
-        tx_ui.send(UiMessage::TimerState(timer.state, timer.pomo)).unwrap();
+        timer.send_state_to_ui(&tx_ui);
 
-        // TODO is zero => stopped, add Reset state
-        while !timer.time_left.is_zero() {
+        while !timer.is_zero() {
             if timer.is_playing {
                 std::thread::sleep(SECOND);
 
-                // Check for commands without blocking
-                loop {
+                loop { // Check for commands without blocking
                     match rx.try_recv() {
                         Ok(command) => match command {
                             Play  => timer.is_playing = !timer.is_playing,
 
                             _ => ()
                         },
+
                         Err(why) => match why {
                             mpsc::TryRecvError::Empty => break,
                             mpsc::TryRecvError::Disconnected => panic!("{}", why),
@@ -168,6 +181,21 @@ pub fn spawn_timer_thread(rx: Receiver<TimerCommand>, tx_ui: Sender<UiMessage>) 
                         timer.is_playing = false;
                         timer.next_state();
 
+
+                        let notification = match &timer.state {
+                            Work => ("Break done", "Time for work!"),
+                            Break => ("Work done", "Time to take a short break!"),
+                            LongBreak => ("Work done", "Time for a long break!"),
+                        };
+
+
+                        Notification::new()
+                            .summary(notification.0)
+                            .body(notification.1)
+                            .timeout(Timeout::Never) // this however is
+                            .show().unwrap();
+
+
                         tx_ui.send(UiMessage::TimerState(timer.state, timer.pomo)).unwrap();
                     }
                 }
@@ -176,18 +204,46 @@ pub fn spawn_timer_thread(rx: Receiver<TimerCommand>, tx_ui: Sender<UiMessage>) 
             } else {
                 loop {
                     match rx.recv().unwrap() { // Block untill command is recieved
-                        Play => { timer.is_playing = true; break }
+                        Play => { 
+                            tx_ui.send(UiMessage::ShowConfirm(false)).unwrap();
+                            timer.command_waiting_for_confirm = None;
+
+                            timer.is_playing = true;
+                            break
+                        }
 
                         Next => {
-                            timer.next_state();
-                            tx_ui.send(UiMessage::Time(timer.time_left)).unwrap();
-                            tx_ui.send(UiMessage::TimerState(timer.state, timer.pomo)).unwrap();
+                            timer.command_waiting_for_confirm = Some(Next);
+                            tx_ui.send(UiMessage::ShowConfirm(true)).unwrap();
                         }
 
                         Prev => {
-                            timer.prev_state();
-                            tx_ui.send(UiMessage::Time(timer.time_left)).unwrap();
-                            tx_ui.send(UiMessage::TimerState(timer.state, timer.pomo)).unwrap();
+                            timer.command_waiting_for_confirm = Some(Prev);
+                            tx_ui.send(UiMessage::ShowConfirm(true)).unwrap();
+                        }
+
+                        Confirm(confirmed) => {
+                            if !confirmed {
+                                timer.command_waiting_for_confirm = None;
+                                tx_ui.send(UiMessage::ShowConfirm(false)).unwrap();
+                            } else if let Some(command) = &timer.command_waiting_for_confirm {
+                                match command {
+                                    Next => {
+                                        timer.next_state();
+                                        timer.send_state_to_ui(&tx_ui);
+                                    }
+
+                                    Prev => {
+                                        timer.prev_state();
+                                        timer.send_state_to_ui(&tx_ui);
+                                    }
+
+                                    _ => ()
+                                }
+
+                                timer.command_waiting_for_confirm = None;
+                                tx_ui.send(UiMessage::ShowConfirm(false)).unwrap();
+                            }
                         }
 
                         Exit => break,
@@ -196,10 +252,8 @@ pub fn spawn_timer_thread(rx: Receiver<TimerCommand>, tx_ui: Sender<UiMessage>) 
             }
         }
 
-        tx_ui.send(UiMessage::Time(timer.time_left))
-            .expect("timer send failed");
+        timer.send_state_to_ui(&tx_ui);
     });
-
 }
 
 

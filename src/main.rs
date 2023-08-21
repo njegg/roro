@@ -19,12 +19,15 @@ fn main() -> std::io::Result<()> {
     loop {
         match term.read_key() {
             Ok(key) => match key {
-                Key::Escape => break,
+                Key::Escape | Key::Char('q') => break,
+
                 Key::Char(' ') => tx_timer.send(TimerCommand::Play).unwrap(),
                 Key::Char('n') => tx_timer.send(TimerCommand::Next).unwrap(),
                 Key::Char('p') => tx_timer.send(TimerCommand::Prev).unwrap(),
 
-                _ => tx_ui.send(UiMessage::Input(key)).unwrap()
+                Key::Char('y') => tx_timer.send(TimerCommand::Confirm(true)).unwrap(),
+
+                _ => tx_timer.send(TimerCommand::Confirm(false)).unwrap(),
             },
             Err(why) => panic!("{why}")
         }
