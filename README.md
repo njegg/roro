@@ -1,2 +1,2 @@
 # roro
-CLI Pomodoro Timer writen in Rust
+[WIP] CLI Pomodoro Timer writen in Rust
