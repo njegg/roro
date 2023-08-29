@@ -1,8 +1,9 @@
 use std::sync::mpsc::{self, Receiver, Sender};
+use std::thread::JoinHandle;
 use std::time::Duration;
 use TimerState::*;
-use notify_rust::{Notification, Timeout};
 
+use crate::notify::send_notification;
 use crate::ui::UiMessage;
 
 
@@ -135,10 +136,6 @@ impl Timer {
         );
     }
 
-    pub fn is_zero(&self) -> bool {
-        self.time_left.is_zero()
-    }
-
     fn send_state_to_ui(&self, tx_ui: &Sender<UiMessage>) {
         tx_ui.send(UiMessage::Time(self.time_left)).unwrap();
         tx_ui.send(UiMessage::TimerState(self.state, self.pomo)).unwrap();
@@ -146,7 +143,7 @@ impl Timer {
 }
 
 
-pub fn spawn_timer_thread(rx: Receiver<TimerCommand>, tx_ui: Sender<UiMessage>) {
+pub fn spawn_timer_thread(rx: Receiver<TimerCommand>, tx_ui: Sender<UiMessage>) -> JoinHandle<()> {
     std::thread::spawn(move || {
         use TimerCommand::*;
 
@@ -154,7 +151,7 @@ pub fn spawn_timer_thread(rx: Receiver<TimerCommand>, tx_ui: Sender<UiMessage>) 
 
         timer.send_state_to_ui(&tx_ui);
 
-        while !timer.is_zero() {
+        loop {
             if timer.is_playing {
                 std::thread::sleep(SECOND);
 
@@ -181,20 +178,7 @@ pub fn spawn_timer_thread(rx: Receiver<TimerCommand>, tx_ui: Sender<UiMessage>) 
                         timer.is_playing = false;
                         timer.next_state();
 
-
-                        let notification = match &timer.state {
-                            Work => ("Break done", "Time for work!"),
-                            Break => ("Work done", "Time to take a short break!"),
-                            LongBreak => ("Work done", "Time for a long break!"),
-                        };
-
-
-                        Notification::new()
-                            .summary(notification.0)
-                            .body(notification.1)
-                            .timeout(Timeout::Never) // this however is
-                            .show().unwrap();
-
+                        send_notification(timer.state);
 
                         tx_ui.send(UiMessage::TimerState(timer.state, timer.pomo)).unwrap();
                     }
@@ -246,14 +230,12 @@ pub fn spawn_timer_thread(rx: Receiver<TimerCommand>, tx_ui: Sender<UiMessage>) 
                             }
                         }
 
-                        Exit => break,
+                        Exit => return,
                     }
                 }
             }
         }
-
-        timer.send_state_to_ui(&tx_ui);
-    });
+    })
 }
 
 

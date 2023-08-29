@@ -1,31 +1,34 @@
-use std::io::Write;
+use std::{io::Write, thread::JoinHandle};
 use console::{Key, Term};
 use std::{time::Duration, sync::mpsc::Receiver};
 
-use crate::timer::{TimerState, TimerCommand};
+use crate::timer::TimerState;
 
-
-const _MIN_WIDTH: u16 = 16;
-const _MIN_HEIGHT: u16 = 16;
 
 const STATE_Y: usize = 2;
 const TIMER_Y: usize = 4;
 const POMO_Y: usize = 6;
+
+// Not used yet
+const _MIN_WIDTH: u16 = 16;
+const _MIN_HEIGHT: u16 = 16;
 const _BINDS_Y: usize = 8;
 const _CONFIRM_Y: usize = 10;
 const _HELP_Y: usize = _MIN_HEIGHT as usize - 1;
-
 
 pub enum UiMessage {
     Input(Key),
     Time(Duration),
     TimerState(TimerState, u64),
-    ShowConfirm(bool), // bool - show or hide the message
-    Stop,
+
+    /// bool - show or hide the confirmation message
+    ShowConfirm(bool), 
+
+    Exit,
 }
 
 
-pub fn spawn_ui_thread(rx: Receiver<UiMessage>) {
+pub fn spawn_ui_thread(rx: Receiver<UiMessage>) -> JoinHandle<std::io::Result<()>> {
     std::thread::spawn(move || -> std::io::Result<()> {
         use UiMessage::*;
 
@@ -68,18 +71,16 @@ pub fn spawn_ui_thread(rx: Receiver<UiMessage>) {
                     term.clear_line()?;
                 }
 
-                Stop => break,
+                Exit => break,
             }
         }
         
         term.clear_screen()?;
         term.flush()?;
-
         term.show_cursor()?;
 
         Ok(())
-    });
-    
+    })
 }
 
 
