@@ -1,11 +1,12 @@
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::JoinHandle;
 use std::time::Duration;
-use TimerState::*;
+use rusty_audio::Audio;
 
 use crate::notify::send_notification;
 use crate::ui::UiMessage;
 
+use TimerState::*;
 
 const SECOND: Duration = Duration::from_secs(1);
 
@@ -53,14 +54,18 @@ struct Timer {
     state: TimerState,
     is_playing: bool,
     command_waiting_for_confirm: Option<TimerCommand>,
+    audio: Audio,
 }
 
 impl Timer {
     fn defaults() -> Timer {
-        let work_time: u64 = 30;
+        let work_time: u64 = 25;
         let break_time: u64 = 5;
-        let long_break_time: u64 = 60;
-        let long_break_interval: u64 = 4;
+        let long_break_time: u64 = 30;
+        let long_break_interval: u64 = 6;
+        let mut audio = Audio::new();
+
+        audio.add("notification_sound", "sounds/sound.mp3");
 
         return Timer {
             is_playing: false,
@@ -74,6 +79,8 @@ impl Timer {
             long_break_interval,
 
             command_waiting_for_confirm: None,
+
+            audio,
         }
     }
 
@@ -179,6 +186,7 @@ pub fn spawn_timer_thread(rx: Receiver<TimerCommand>, tx_ui: Sender<UiMessage>) 
                         timer.next_state();
 
                         send_notification(timer.state);
+                        timer.audio.play("notification_sound");
 
                         tx_ui.send(UiMessage::TimerState(timer.state, timer.pomo)).unwrap();
                     }

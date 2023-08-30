@@ -9,3 +9,9 @@ edition = "2021"
 clap = "4.3.5"
 console = "0.15.7"
 notify-rust = "4.8.0"
+rusty_audio = "1.4.1"
+
+[profile.release]
+opt-level = 'z'     # Optimize for size
+lto = true          # Enable link-time optimization
+strip = true        # Strip symbols from binary*
