@@ -117,10 +117,10 @@ impl Timer {
 
     fn defaults() -> Timer {
         Timer::create(TimerConfig {
-            work_time: 25,
-            break_time: 5,
-            long_break_time: 30,
-            long_break_interval: 6,
+            work_time: 50,
+            break_time: 10,
+            long_break_time: 60,
+            long_break_interval: 4,
         })
     }
 
