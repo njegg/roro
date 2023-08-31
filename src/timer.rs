@@ -1,7 +1,10 @@
+use std::fs::{OpenOptions, self};
+use std::io::Write;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::JoinHandle;
 use std::time::Duration;
 use rusty_audio::Audio;
+use serde_derive::Deserialize;
 
 use crate::notify::send_notification;
 use crate::ui::UiMessage;
@@ -40,7 +43,6 @@ impl std::fmt::Display for TimerState {
 }
 
 
-#[allow(dead_code)]
 struct Timer {
     time_left: Duration,
     pomo: u64,
@@ -57,12 +59,21 @@ struct Timer {
     audio: Audio,
 }
 
+#[derive(Deserialize)]
+struct TomlTimerConfig {
+    timer_config: TimerConfig,
+}
+
+#[derive(Deserialize)]
+struct TimerConfig {
+    work_time: u64,
+    break_time: u64,
+    long_break_time: u64,
+    long_break_interval: u64,
+}
+
 impl Timer {
-    fn defaults() -> Timer {
-        let work_time: u64 = 25;
-        let break_time: u64 = 5;
-        let long_break_time: u64 = 30;
-        let long_break_interval: u64 = 6;
+    fn create(config: TimerConfig) -> Timer {
         let mut audio = Audio::new();
 
         audio.add("notification_sound", "sounds/sound.mp3");
@@ -70,18 +81,47 @@ impl Timer {
         return Timer {
             is_playing: false,
             state: TimerState::Work,
-            time_left: Duration::from_mins(work_time),
+            time_left: Duration::from_mins(config.work_time),
             pomo: 1,
 
-            work_time,
-            break_time,
-            long_break_time,
-            long_break_interval,
+            work_time: config.work_time,
+            break_time: config.break_time,
+            long_break_time: config.long_break_time,
+            long_break_interval: config.long_break_interval,
 
             command_waiting_for_confirm: None,
 
             audio,
         }
+    }
+
+    fn from_toml_config(config_path: &str) -> Option<Timer> {
+        let config_str = match fs::read_to_string(config_path) {
+            Ok(s) => s,
+            Err(err) => {
+                log_error(err.to_string());
+                return None;
+            }
+        };
+
+        let config: TomlTimerConfig  = match toml::from_str(&config_str) {
+            Ok(c) => c,
+            Err(err) => {
+                log_error(err.to_string());
+                return None;
+            }
+        };
+
+        Some(Timer::create(config.timer_config))
+    }
+
+    fn defaults() -> Timer {
+        Timer::create(TimerConfig {
+            work_time: 25,
+            break_time: 5,
+            long_break_time: 30,
+            long_break_interval: 6,
+        })
     }
 
     fn next_state(&mut self) {
@@ -154,7 +194,15 @@ pub fn spawn_timer_thread(rx: Receiver<TimerCommand>, tx_ui: Sender<UiMessage>) 
     std::thread::spawn(move || {
         use TimerCommand::*;
 
-        let mut timer = Timer::defaults();
+        let config_path = "config/config.toml";
+
+        let mut timer = match Timer::from_toml_config(config_path) {
+            Some(t) => t,
+            None => {
+                tx_ui.send(UiMessage::Error(format!("Error reading: '{}', check roro.log", config_path))).unwrap();
+                Timer::defaults()
+            }
+        };
 
         timer.send_state_to_ui(&tx_ui);
 
@@ -257,3 +305,18 @@ impl DurationExtension for Duration {
     }
 }
 
+fn log_error(error_message: String) {
+    let mut log_file = OpenOptions::new()
+        .append(true)
+        .open("roro.log")
+        .expect("Cannot open log file");
+
+    let now = chrono::Local::now();
+    let date_time = now.format("%Y-%m-%d %H:%M:%S");
+
+    let log_message = format!("[{date_time}]: {error_message}\n");
+
+    log_file
+        .write(log_message.as_str().as_bytes())
+        .expect("Write to log file failed");
+}

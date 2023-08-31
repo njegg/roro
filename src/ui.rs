@@ -20,6 +20,7 @@ pub enum UiMessage {
     Input(Key),
     Time(Duration),
     TimerState(TimerState, u64),
+    Error(String),
 
     /// bool - show or hide the confirmation message
     ShowConfirm(bool), 
@@ -69,6 +70,12 @@ pub fn spawn_ui_thread(rx: Receiver<UiMessage>) -> JoinHandle<std::io::Result<()
                 ShowConfirm(false) => {
                     term.move_cursor_to(0, _CONFIRM_Y)?;
                     term.clear_line()?;
+                }
+                
+                Error(message) => {
+                    let y = term.size().0 as usize - 1;
+
+                    term.println_to_centered(y, message)?;
                 }
 
                 Exit => break,
