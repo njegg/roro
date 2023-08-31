@@ -15,6 +15,7 @@ serde = "1.0.188"
 serde_derive = "1.0.188"
 signal-hook = "0.3.17"
 toml = "0.7.6"
+time = "0.2.23"
 
 [profile.release]
 opt-level = 'z'     # Optimize for size
