@@ -3,7 +3,7 @@ use std::io::Write;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread::JoinHandle;
 use std::time::Duration;
-use rusty_audio::Audio;
+// use rusty_audio::Audio;
 use serde_derive::Deserialize;
 
 use crate::notify::send_notification;
@@ -56,7 +56,7 @@ struct Timer {
     state: TimerState,
     is_playing: bool,
     command_waiting_for_confirm: Option<TimerCommand>,
-    audio: Audio,
+    // audio: Audio,
 }
 
 #[derive(Deserialize)]
@@ -74,9 +74,9 @@ struct TimerConfig {
 
 impl Timer {
     fn create(config: TimerConfig) -> Timer {
-        let mut audio = Audio::new();
+        // let mut audio = Audio::new();
 
-        audio.add("notification_sound", "sounds/sound.mp3");
+        // audio.add("notification_sound", "sounds/sound.mp3");
 
         return Timer {
             is_playing: false,
@@ -91,7 +91,7 @@ impl Timer {
 
             command_waiting_for_confirm: None,
 
-            audio,
+            // audio,
         }
     }
 
@@ -234,7 +234,7 @@ pub fn spawn_timer_thread(rx: Receiver<TimerCommand>, tx_ui: Sender<UiMessage>) 
                         timer.next_state();
 
                         send_notification(timer.state);
-                        timer.audio.play("notification_sound");
+                        // timer.audio.play("notification_sound");
 
                         tx_ui.send(UiMessage::TimerState(timer.state, timer.pomo)).unwrap();
                     }
@@ -278,6 +278,11 @@ pub fn spawn_timer_thread(rx: Receiver<TimerCommand>, tx_ui: Sender<UiMessage>) 
                                         timer.send_state_to_ui(&tx_ui);
                                     }
 
+                                    Exit => {
+                                        tx_ui.send(UiMessage::Exit).unwrap();
+                                        return;
+                                    },
+
                                     _ => ()
                                 }
 
@@ -286,7 +291,10 @@ pub fn spawn_timer_thread(rx: Receiver<TimerCommand>, tx_ui: Sender<UiMessage>) 
                             }
                         }
 
-                        Exit => return,
+                        Exit => {
+                            timer.command_waiting_for_confirm = Some(Exit);
+                            tx_ui.send(UiMessage::ShowConfirm(true)).unwrap();
+                        },
                     }
                 }
             }
